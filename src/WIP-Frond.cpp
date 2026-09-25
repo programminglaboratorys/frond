@@ -18,11 +18,31 @@
 
 #include <iostream>
 
+
+#define INTERNAL_FROND_parseString(data, member, key, fallback_code) \
+	if (!data->contains(key) || !(*data)[key].is_string()) { \
+		fallback_code; \
+	} \
+	m.member = (*data)[key].get_ref<const std::string&>();
+
+
+#define INTERNAL_FROND_parseStringFallbackValue(data, member, key, fallback_value) \
+	if (!data->contains(key) || !(*data)[key].is_string()) { \
+		(*data)[key] = fallback_value; \
+	} \
+	m.member = (*data)[key].get_ref<const std::string&>();
+
+#define INTERNAL_FROND_parseVersion(data, member, key, fallback_code) \
+    if (!data->contains(key) || !(*data)[key].is_string()) { \
+        fallback_code; \
+    } \
+    m.member = Clover::Version((*data)[key].get_ref<const std::string&>());
+
 enum class ModStatus {
 	Disabled,          // Discovered, but disabled
 	Active,            // Enabled, validated, and ready to go
 	MissingDependency, // Discovered, but required dependencies are missing from disk
-	Depend`encyCycle,   // Discovered, but caught in a circular dependency loop
+	DependencyCycle,   // Discovered, but caught in a circular dependency loop
 };
 
 
@@ -81,10 +101,15 @@ protected:
 public:
 	std::string_view id;
 	std::string_view name;
-	std::vector<Author> authors;
-	std::vector<Dependency> dependencies;
-	//
+	std::string_view description;
 	std::string_view icon; // relative path to the icon file (e.g., "icon.png")
+	Clover::Version version;
+
+	//
+	std::vector<Dependency> dependencies;
+	std::vector<Author> authors;
+	std::vector<std::string_view> load_after;
+
 	std::filesystem::path root{};
 
 	ModManifest() = default;
@@ -99,21 +124,12 @@ public:
 		}
 
 		m.data = std::make_shared<json>(j);
-
-		if (!m.data->contains("id") || !(*m.data)["id"].is_string()) {
-			return ParseError::Invalid;
-		}
-		m.id = (*m.data)["id"].get_ref<const std::string&>();
-
-		if (!m.data->contains("name") || !(*m.data)["name"].is_string()) {
-			(*m.data)["name"] = "Unnamed Mod";
-		}
-		m.name = (*m.data)["name"].get_ref<const std::string&>();
-
-		if (!m.data->contains("icon") || !(*m.data)["icon"].is_string()) {
-			(*m.data)["icon"] = "";
-		}
-		m.icon = (*m.data)["icon"].get_ref<const std::string&>();
+		// 
+		INTERNAL_FROND_parseString			   (m.data, id, "id", return ParseError::Invalid);
+		INTERNAL_FROND_parseStringFallbackValue(m.data, name, "name", "Unnamed Mod");
+		INTERNAL_FROND_parseStringFallbackValue(m.data, icon, "icon", "");
+		INTERNAL_FROND_parseStringFallbackValue(m.data, description, "description", "");
+		INTERNAL_FROND_parseVersion			   (m.data, version, "version", return ParseError::Invalid);
 
 		if (m.data->contains("authors") && (*m.data)["authors"].is_array()) {
 			for (auto& author_node : (*m.data)["authors"]) {
@@ -129,12 +145,17 @@ public:
 			}
 		}
 
+		if (m.data->contains("load_after") && (*m.data)["authors"].is_array()) {
+			for (auto& id_node : (*m.data)["authors"]) {
+				if (!id_node.is_string()) continue;
+				m.load_after.emplace_back(id_node);
+			}
+		}
+
 		return ParseError::None;
 	}
 
 	friend void from_json(const json& j, ModManifest& m) {
-		// NOTE: This requires an overload like `static ParseError Load(const json&, ModManifest&)` 
-		// because the current Load strictly expects an std::ifstream&.
 		ParseError err = Load(j, m);
 
 		if (err != ParseError::None) {

@@ -41,7 +41,7 @@
 enum class ModStatus {
 	Disabled,          // Discovered, but disabled
 	Active,            // Enabled, validated, and ready to go
-	MissingDependency, // Discovered, but required dependencies are missing from disk
+	MissingDependency, // Discovered, but required dependencies are missing from 
 	DependencyCycle,   // Discovered, but caught in a circular dependency loop
 };
 
@@ -92,7 +92,6 @@ enum class ParseError {
 	Invalid,    // missing required field
 };
 
-//static ParseError Load(std::ifstream& f, ModManifest& out);
 
 class ModManifest {
 protected:
@@ -145,8 +144,8 @@ public:
 			}
 		}
 
-		if (m.data->contains("load_after") && (*m.data)["authors"].is_array()) {
-			for (auto& id_node : (*m.data)["authors"]) {
+		if (m.data->contains("load_after") && (*m.data)["load_after"].is_array()) {
+			for (auto& id_node : (*m.data)["load_after"]) {
 				if (!id_node.is_string()) continue;
 				m.load_after.emplace_back(id_node);
 			}
